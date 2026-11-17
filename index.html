@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Laurs POTS Tracker</title>
+  <script src="https://jsdelivr.net"></script>
+  <style>
+    body { font-family: -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 16px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    button { background: #3b82f6; color: white; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    button.secondary { background: #334155; margin-left: 6px; }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px; }
+    .card { background: #1e293b; padding: 14px; border-radius: 12px; }
+    .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; }
+    .val { font-size: 22px; font-weight: 700; margin-top: 4px; }
+    .chart-box { background: #1e293b; padding: 14px; border-radius: 12px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h2 style="margin:0;">POTS Tracker</h2>
+      <small id="status" style="color:#94a3b8;">Disconnected</small>
+    </div>
+    <div>
+      <button id="connectBtn">Connect</button>
+      <button id="exportBtn" class="secondary">CSV</button>
+      <button id="clearBtn" class="secondary">Clear</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="label">Heart Rate</div><div class="val" id="bpmVal">-- BPM</div></div>
+    <div class="card"><div class="label">Stress (HRV)</div><div class="val" id="hrvVal">-- ms</div></div>
+    <div class="card"><div class="label">Skin Temp</div><div class="val" id="tempVal">-- °F</div></div>
+    <div class="card"><div class="label">Posture / Bat</div><div class="val" id="postureVal">-- | --%</div></div>
+  </div>
+
+  <div class="chart-box"><canvas id="hrChart"></canvas></div>
+  <div class="chart-box"><canvas id="hrvTempChart"></canvas></div>
+
+  <script>
+    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const CHAR_UUID    = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+    let logs = JSON.parse(localStorage.getItem("potsLogs") || "[]");
+
+    const hrChart = new Chart(document.getElementById("hrChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          { label: "BPM", data: [], borderColor: "#ef4444", tension: 0.3, yAxisID: "y" },
+          { label: "Standing (1=Up)", data: [], borderColor: "#38bdf8", stepped: true, yAxisID: "y1" }
+        ]
+      },
+      options: { scales: { y: { beginAtZero: false }, y1: { min: 0, max: 1.5, display: false } } }
+    });
+
+    const hrvTempChart = new Chart(document.getElementById("hrvTempChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          { label: "HRV (ms)", data: [], borderColor: "#10b981", tension: 0.3, yAxisID: "y" },
+          { label: "Skin Temp (°F)", data: [], borderColor: "#f59e0b", tension: 0.3, yAxisID: "y1" }
+        ]
+      },
+      options: { scales: { y: { position: "left" }, y1: { position: "right", grid: { drawOnChartArea: false } } } }
+    });
+
+    function refreshCharts() {
+      logs.sort((a, b) => a.ts - b.ts);
+      const recent = logs.slice(-90); // Show last 90 readings
+      const labels = recent.map(r => r.time);
+
+      hrChart.data.labels = labels;
+      hrChart.data.datasets[0].data = recent.map(r => r.bpm);
+      hrChart.data.datasets[1].data = recent.map(r => r.posture);
+      hrChart.update();
+
+      hrvTempChart.data.labels = labels;
+      hrvTempChart.data.datasets[0].data = recent.map(r => r.still ? r.hrv : null);
+      hrvTempChart.data.datasets[1].data = recent.map(r => r.tempF);
+      hrvTempChart.update();
+    }
+
+    refreshCharts();
+
+    document.getElementById("connectBtn").addEventListener("click", async () => {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: "laurs_pots_pod" }],
+          optionalServices: [SERVICE_UUID]
+        });
+        document.getElementById("status").textContent = "Connecting...";
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        const char = await service.getCharacteristic(CHAR_UUID);
+
+        await char.startNotifications();
+        document.getElementById("status").textContent = "Connected (Syncing...)";
+
+        char.addEventListener("characteristicvaluechanged", (e) => {
+          const raw = new TextDecoder().decode(e.target.value);
+          const parts = raw.split(",");
+          const type = parts[0];
+
+          let ageSec = 0;
+          let vals = [];
+
+          if (type === "B") {
+            ageSec = Number(parts[1]);
+            vals = parts.slice(2).map(Number);
+            document.getElementById("status").textContent = `Synced offline log (${logs.length} total)`;
+          } else if (type === "L") {
+            vals = parts.slice(2).map(Number); // Skip uptimeSec
+            document.getElementById("status").textContent = `Connected Live (${logs.length + 1} logs)`;
+          } else {
+            return;
+          }
+
+          const [bpm, hrv, still, tempF, posture, motion, bat] = vals;
+          const recordTs = Date.now() - (ageSec * 1000);
+          const time = new Date(recordTs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+          if (type === "L") {
+            document.getElementById("bpmVal").textContent = `${bpm.toFixed(0)} BPM`;
+            document.getElementById("hrvVal").textContent = still ? `${hrv.toFixed(0)} ms` : "Moving...";
+            document.getElementById("tempVal").textContent = `${tempF.toFixed(1)} °F`;
+            document.getElementById("postureVal").textContent = `${posture ? "Standing" : "Lying"} | ${bat}%`;
+          }
+
+          logs.push({ ts: recordTs, time, bpm, hrv, still, tempF, posture, motion, bat });
+          localStorage.setItem("potsLogs", JSON.stringify(logs));
+          refreshCharts();
+        });
+      } catch (err) {
+        document.getElementById("status").textContent = "Error: " + err.message;
+      }
+    });
+
+    document.getElementById("exportBtn").addEventListener("click", () => {
+      const header = "timestamp,time,bpm,hrv,still,tempF,posture,motion,battery\n";
+      const rows = logs.map(r => `${new Date(r.ts).toISOString()},${r.time},${r.bpm},${r.hrv},${r.still},${r.tempF},${r.posture},${r.motion},${r.bat}`).join("\n");
+      const blob = new Blob([header + rows], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "pots_tracker_log.csv";
+      a.click();
+    });
+
+    document.getElementById("clearBtn").addEventListener("click", () => {
+      if (confirm("Clear saved phone logs? (Export CSV first if needed)")) {
+        logs = [];
+        localStorage.removeItem("potsLogs");
+        refreshCharts();
+      }
+    });
+  </script>
+</body>
+</html>
