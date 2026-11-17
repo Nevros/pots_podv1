@@ -3,95 +3,359 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Laurs POTS Tracker</title>
+  <title>Laur's Full POTS & Sleep Dashboard</title>
   <script src="https://jsdelivr.net"></script>
   <style>
-    body { font-family: -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 16px; }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    button { background: #3b82f6; color: white; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; }
-    button.secondary { background: #334155; margin-left: 6px; }
-    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px; }
-    .card { background: #1e293b; padding: 14px; border-radius: 12px; }
-    .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; }
-    .val { font-size: 22px; font-weight: 700; margin-top: 4px; }
-    .chart-box { background: #1e293b; padding: 14px; border-radius: 12px; margin-bottom: 16px; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      padding: 14px;
+      padding-bottom: 44px;
+    }
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 8px 13px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.secondary { background: #334155; }
+    button.active-range { background: #0ea5e9; outline: 2px solid #7dd3fc; }
+    .range-bar { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 9px;
+      margin-bottom: 16px;
+    }
+    .card {
+      background: #1e293b;
+      padding: 11px 13px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+    }
+    .label { font-size: 10.5px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+    .val { font-size: 20px; font-weight: 700; margin-top: 3px; }
+    .sub { font-size: 11px; color: #cbd5e1; margin-top: 2px; }
+    .chart-box {
+      background: #1e293b;
+      padding: 13px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      margin-bottom: 14px;
+    }
+    .chart-title { font-size: 12.5px; font-weight: 600; color: #e2e8f0; margin-bottom: 8px; }
   </style>
 </head>
 <body>
+
   <div class="header">
     <div>
-      <h2 style="margin:0;">POTS Tracker</h2>
+      <h2 style="margin:0; font-size: 19px;">Laur's POTS & Sleep Lab</h2>
       <small id="status" style="color:#94a3b8;">Disconnected</small>
     </div>
-    <div>
-      <button id="connectBtn">Connect</button>
+    <div class="btn-row">
+      <button id="connectBtn">Connect Pod</button>
       <button id="exportBtn" class="secondary">CSV</button>
       <button id="clearBtn" class="secondary">Clear</button>
     </div>
   </div>
 
-  <div class="grid">
-    <div class="card"><div class="label">Heart Rate</div><div class="val" id="bpmVal">-- BPM</div></div>
-    <div class="card"><div class="label">Stress (HRV)</div><div class="val" id="hrvVal">-- ms</div></div>
-    <div class="card"><div class="label">Skin Temp</div><div class="val" id="tempVal">-- °F</div></div>
-    <div class="card"><div class="label">Posture / Bat</div><div class="val" id="postureVal">-- | --%</div></div>
+  <div class="range-bar">
+    <button class="secondary range-btn active-range" data-hours="1">Last 1 Hr</button>
+    <button class="secondary range-btn" data-hours="8">Last 8 Hrs (Sleep)</button>
+    <button class="secondary range-btn" data-hours="24">Last 24 Hrs</button>
+    <button class="secondary range-btn" data-hours="9999">All Logs</button>
   </div>
 
-  <div class="chart-box"><canvas id="hrChart"></canvas></div>
-  <div class="chart-box"><canvas id="hrvTempChart"></canvas></div>
+  <div class="grid">
+    <div class="card">
+      <div class="label">Heart Rate</div>
+      <div class="val" id="bpmVal" style="color:#f87171;">-- BPM</div>
+      <div class="sub" id="bpmSub">Min Resting: -- BPM</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Blood Oxygen (SpO2)</div>
+      <div class="val" id="spo2Val" style="color:#38bdf8;">--%</div>
+      <div class="sub" id="spo2Sub">Window Min: --%</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Autonomic Stress (HRV)</div>
+      <div class="val" id="hrvVal" style="color:#34d399;">-- ms</div>
+      <div class="sub" id="hrvSub">Still Avg: -- ms</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Skin Temperature</div>
+      <div class="val" id="tempVal" style="color:#fbbf24;">-- °F</div>
+      <div class="sub" id="tempSub">Range: -- to -- °F</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Posture & Tilt Angle</div>
+      <div class="val" id="postureVal" style="color:#60a5fa;">--</div>
+      <div class="sub" id="orthoSub">Stand Jump: -- BPM</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Sleep & Stillness</div>
+      <div class="val" id="sleepVal" style="color:#a78bfa;">--h --m</div>
+      <div class="sub" id="motionSub">Stillness: --%</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Breathing & Turns</div>
+      <div class="val" id="respVal" style="color:#f472b6;">-- br/m</div>
+      <div class="sub" id="gyroSub">Gyro Turn: -- °/s</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Pod Battery</div>
+      <div class="val" id="batVal" style="color:#4ade80;">--%</div>
+      <div class="sub" id="logCountSub">0 saved logs</div>
+    </div>
+  </div>
+
+  <div class="chart-box">
+    <div class="chart-title">1. Heart Rate (BPM) & Exact Arm Tilt Angle (0° Lying -> 90° Standing)</div>
+    <canvas id="hrTiltChart"></canvas>
+  </div>
+
+  <div class="chart-box">
+    <div class="chart-title">2. Stress / HRV (ms) & Blood Oxygen SpO2 (%)</div>
+    <canvas id="hrvSpo2Chart"></canvas>
+  </div>
+
+  <div class="chart-box">
+    <div class="chart-title">3. Skin Temperature (°F) & Overnight Respiratory Rate (Breaths/Min)</div>
+    <canvas id="tempRespChart"></canvas>
+  </div>
+
+  <div class="chart-box">
+    <div class="chart-title">4. 6-Axis Sleep Actigraphy: Linear Motion (m/s²) & Gyro Turn Rate (°/s)</div>
+    <canvas id="imuChart"></canvas>
+  </div>
+
+  <div class="chart-box">
+    <div class="chart-title">5. 3-Axis Sleep Orientation Vectors (X, Y, Z Gravity Axes in m/s²)</div>
+    <canvas id="axesChart"></canvas>
+  </div>
+
+  <div class="chart-box">
+    <div class="chart-title">6. Pod Battery Level (%)</div>
+    <canvas id="batChart"></canvas>
+  </div>
 
   <script>
+    const DEVICE_NAME  = "laurs_pots_pod";
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const CHAR_UUID    = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
     let logs = JSON.parse(localStorage.getItem("potsLogs") || "[]");
+    let selectedHours = 1;
 
-    const hrChart = new Chart(document.getElementById("hrChart"), {
+    const baseOpts = {
+      responsive: true,
+      animation: false,
+      plugins: { legend: { labels: { color: "#cbd5e1", boxWidth: 11, font: { size: 10.5 } } } },
+      scales: {
+        x: { ticks: { color: "#94a3b8", maxTicksLimit: 8 }, grid: { color: "#334155" } },
+        y: { ticks: { color: "#94a3b8" }, grid: { color: "#334155" } }
+      }
+    };
+
+    const hrTiltChart = new Chart(document.getElementById("hrTiltChart"), {
       type: "line",
       data: {
         labels: [],
         datasets: [
-          { label: "BPM", data: [], borderColor: "#ef4444", tension: 0.3, yAxisID: "y" },
-          { label: "Standing (1=Up)", data: [], borderColor: "#38bdf8", stepped: true, yAxisID: "y1" }
+          { label: "BPM", data: [], borderColor: "#f87171", tension: 0.25, pointRadius: 2, yAxisID: "y" },
+          { label: "Arm Tilt (0-90°)", data: [], borderColor: "#60a5fa", backgroundColor: "rgba(96,165,250,0.15)", fill: true, tension: 0.2, pointRadius: 1, yAxisID: "y1" }
         ]
       },
-      options: { scales: { y: { beginAtZero: false }, y1: { min: 0, max: 1.5, display: false } } }
+      options: { ...baseOpts, scales: { x: baseOpts.scales.x, y: { position: "left", ticks: { color: "#f87171" }, grid: { color: "#334155" } }, y1: { position: "right", min: 0, max: 90, ticks: { color: "#60a5fa" }, grid: { drawOnChartArea: false } } } }
     });
 
-    const hrvTempChart = new Chart(document.getElementById("hrvTempChart"), {
+    const hrvSpo2Chart = new Chart(document.getElementById("hrvSpo2Chart"), {
       type: "line",
       data: {
         labels: [],
         datasets: [
-          { label: "HRV (ms)", data: [], borderColor: "#10b981", tension: 0.3, yAxisID: "y" },
-          { label: "Skin Temp (°F)", data: [], borderColor: "#f59e0b", tension: 0.3, yAxisID: "y1" }
+          { label: "HRV (ms)", data: [], borderColor: "#34d399", tension: 0.25, spanGaps: true, pointRadius: 2, yAxisID: "y" },
+          { label: "SpO2 (%)", data: [], borderColor: "#38bdf8", tension: 0.25, spanGaps: true, pointRadius: 2, yAxisID: "y1" }
         ]
       },
-      options: { scales: { y: { position: "left" }, y1: { position: "right", grid: { drawOnChartArea: false } } } }
+      options: { ...baseOpts, scales: { x: baseOpts.scales.x, y: { position: "left", ticks: { color: "#34d399" }, grid: { color: "#334155" } }, y1: { position: "right", min: 88, max: 100, ticks: { color: "#38bdf8" }, grid: { drawOnChartArea: false } } } }
     });
 
-    function refreshCharts() {
+    const tempRespChart = new Chart(document.getElementById("tempRespChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          { label: "Skin Temp (°F)", data: [], borderColor: "#fbbf24", tension: 0.25, pointRadius: 2, yAxisID: "y" },
+          { label: "Breaths/Min", data: [], borderColor: "#f472b6", tension: 0.25, spanGaps: true, pointRadius: 2, yAxisID: "y1" }
+        ]
+      },
+      options: { ...baseOpts, scales: { x: baseOpts.scales.x, y: { position: "left", ticks: { color: "#fbbf24" }, grid: { color: "#334155" } }, y1: { position: "right", min: 6, max: 30, ticks: { color: "#f472b6" }, grid: { drawOnChartArea: false } } } }
+    });
+
+    const imuChart = new Chart(document.getElementById("imuChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          { label: "Accel Motion (m/s²)", data: [], borderColor: "#c084fc", backgroundColor: "rgba(192,132,252,0.18)", fill: true, tension: 0.2, pointRadius: 1, yAxisID: "y" },
+          { label: "Gyro Turn (°/s)", data: [], borderColor: "#fb923c", tension: 0.2, pointRadius: 1, yAxisID: "y1" }
+        ]
+      },
+      options: { ...baseOpts, scales: { x: baseOpts.scales.x, y: { position: "left", beginAtZero: true, ticks: { color: "#c084fc" }, grid: { color: "#334155" } }, y1: { position: "right", beginAtZero: true, ticks: { color: "#fb923c" }, grid: { drawOnChartArea: false } } } }
+    });
+
+    const axesChart = new Chart(document.getElementById("axesChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          { label: "Accel X", data: [], borderColor: "#f87171", tension: 0.2, pointRadius: 0 },
+          { label: "Accel Y", data: [], borderColor: "#4ade80", tension: 0.2, pointRadius: 0 },
+          { label: "Accel Z", data: [], borderColor: "#38bdf8", tension: 0.2, pointRadius: 0 }
+        ]
+      },
+      options: { ...baseOpts, scales: { x: baseOpts.scales.x, y: { min: -11, max: 11, ticks: { color: "#94a3b8" }, grid: { color: "#334155" } } } }
+    });
+
+    const batChart = new Chart(document.getElementById("batChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          { label: "Battery %", data: [], borderColor: "#4ade80", backgroundColor: "rgba(74,222,128,0.15)", fill: true, tension: 0.2, pointRadius: 1 }
+        ]
+      },
+      options: { ...baseOpts, scales: { x: baseOpts.scales.x, y: { min: 0, max: 100, ticks: { color: "#4ade80" }, grid: { color: "#334155" } } } }
+            });
+
+    function refreshDashboard() {
       logs.sort((a, b) => a.ts - b.ts);
-      const recent = logs.slice(-90); // Show last 90 readings
-      const labels = recent.map(r => r.time);
+      const cutoff = Date.now() - (selectedHours * 3600 * 1000);
+      const filtered = (selectedHours >= 9999) ? logs : logs.filter(r => r.ts >= cutoff);
 
-      hrChart.data.labels = labels;
-      hrChart.data.datasets[0].data = recent.map(r => r.bpm);
-      hrChart.data.datasets[1].data = recent.map(r => r.posture);
-      hrChart.update();
+      document.getElementById("logCountSub").textContent = `${logs.length} total saved logs`;
 
-      hrvTempChart.data.labels = labels;
-      hrvTempChart.data.datasets[0].data = recent.map(r => r.still ? r.hrv : null);
-      hrvTempChart.data.datasets[1].data = recent.map(r => r.tempF);
-      hrvTempChart.update();
+      if (filtered.length > 0) {
+        const latest = filtered[filtered.length - 1];
+
+        document.getElementById("bpmVal").textContent = latest.bpm > 0 ? `${latest.bpm.toFixed(0)} BPM` : "No Contact";
+        document.getElementById("spo2Val").textContent = latest.spo2 > 70 ? `${latest.spo2.toFixed(1)}%` : "--%";
+        document.getElementById("hrvVal").textContent = latest.still ? `${latest.hrv.toFixed(0)} ms` : "Moving...";
+        document.getElementById("tempVal").textContent = latest.tempF > 50 ? `${latest.tempF.toFixed(1)} °F` : "-- °F";
+        document.getElementById("postureVal").textContent = `${latest.posture ? "Stand" : "Lying"} (${latest.tiltDeg.toFixed(0)}°)`;
+        document.getElementById("respVal").textContent = latest.respRate > 0 ? `${latest.respRate.toFixed(1)} br/m` : "Active";
+        document.getElementById("gyroSub").textContent = `Gyro Turn: ${latest.gyroDps.toFixed(1)} °/s`;
+
+        const batEl = document.getElementById("batVal");
+        batEl.textContent = `${latest.bat}%`;
+        batEl.style.color = latest.bat <= 20 ? "#f87171" : "#4ade80";
+
+        const validBPMs = filtered.filter(r => r.bpm > 35).map(r => r.bpm);
+        document.getElementById("bpmSub").textContent = `Min Resting: ${validBPMs.length ? Math.min(...validBPMs).toFixed(0) : "--"} BPM`;
+
+        const validSpo2 = filtered.filter(r => r.spo2 > 70).map(r => r.spo2);
+        document.getElementById("spo2Sub").textContent = `Window Min: ${validSpo2.length ? Math.min(...validSpo2).toFixed(1) : "--"}%`;
+
+        const stillHRVs = filtered.filter(r => r.still === 1 && r.hrv > 0).map(r => r.hrv);
+        document.getElementById("hrvSub").textContent = `Still Avg: ${stillHRVs.length ? (stillHRVs.reduce((a, b) => a + b, 0) / stillHRVs.length).toFixed(0) : "--"} ms`;
+
+        const validTemps = filtered.filter(r => r.tempF > 50).map(r => r.tempF);
+        if (validTemps.length) {
+          document.getElementById("tempSub").textContent = `${Math.min(...validTemps).toFixed(1)}° – ${Math.max(...validTemps).toFixed(1)}°F`;
+        }
+
+        const lyingBPMs = filtered.filter(r => r.posture === 0 && r.bpm > 35).map(r => r.bpm);
+        const standBPMs = filtered.filter(r => r.posture === 1 && r.bpm > 35).map(r => r.bpm);
+        if (lyingBPMs.length && standBPMs.length) {
+          const avgLie = lyingBPMs.reduce((a, b) => a + b, 0) / lyingBPMs.length;
+          const avgStand = standBPMs.reduce((a, b) => a + b, 0) / standBPMs.length;
+          const delta = (avgStand - avgLie).toFixed(0);
+          document.getElementById("orthoSub").textContent = `Stand Delta: ${delta >= 0 ? "+" : ""}${delta} BPM`;
+        } else {
+          document.getElementById("orthoSub").textContent = `Need lying + stand data`;
+        }
+
+        const sleepMins = filtered.filter(r => r.posture === 0 && r.still === 1).length;
+        const stillPct = ((filtered.filter(r => r.still === 1).length / filtered.length) * 100).toFixed(0);
+        document.getElementById("sleepVal").textContent = `${Math.floor(sleepMins / 60)}h ${sleepMins % 60}m`;
+        document.getElementById("motionSub").textContent = `Stillness: ${stillPct}%`;
+      }
+
+      const step = Math.max(1, Math.floor(filtered.length / 250));
+      const d = filtered.filter((_, idx) => idx % step === 0);
+      const labels = d.map(r => r.time);
+
+      hrTiltChart.data.labels = labels;
+      hrTiltChart.data.datasets[0].data = d.map(r => r.bpm > 0 ? r.bpm : null);
+      hrTiltChart.data.datasets[1].data = d.map(r => r.tiltDeg);
+      hrTiltChart.update();
+
+      hrvSpo2Chart.data.labels = labels;
+      hrvSpo2Chart.data.datasets[0].data = d.map(r => (r.still === 1 && r.hrv > 0) ? r.hrv : null);
+      hrvSpo2Chart.data.datasets[1].data = d.map(r => r.spo2 > 70 ? r.spo2 : null);
+      hrvSpo2Chart.update();
+
+      tempRespChart.data.labels = labels;
+      tempRespChart.data.datasets[0].data = d.map(r => r.tempF > 50 ? r.tempF : null);
+      tempRespChart.data.datasets[1].data = d.map(r => r.respRate > 0 ? r.respRate : null);
+      tempRespChart.update();
+
+      imuChart.data.labels = labels;
+      imuChart.data.datasets[0].data = d.map(r => r.motion);
+      imuChart.data.datasets[1].data = d.map(r => r.gyroDps);
+      imuChart.update();
+
+      axesChart.data.labels = labels;
+      axesChart.data.datasets[0].data = d.map(r => r.ax);
+      axesChart.data.datasets[1].data = d.map(r => r.ay);
+      axesChart.data.datasets[2].data = d.map(r => r.az);
+      axesChart.update();
+
+      batChart.data.labels = labels;
+      batChart.data.datasets[0].data = d.map(r => r.bat);
+      batChart.update();
     }
 
-    refreshCharts();
+    document.querySelectorAll(".range-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".range-btn").forEach(b => b.classList.remove("active-range"));
+        btn.classList.add("active-range");
+        selectedHours = Number(btn.dataset.hours);
+        refreshDashboard();
+      });
+    });
+
+    refreshDashboard();
 
     document.getElementById("connectBtn").addEventListener("click", async () => {
       try {
         const device = await navigator.bluetooth.requestDevice({
-          filters: [{ name: "laurs_pots_pod" }],
+          filters: [{ name: DEVICE_NAME }],
           optionalServices: [SERVICE_UUID]
         });
         document.getElementById("status").textContent = "Connecting...";
@@ -113,28 +377,21 @@
           if (type === "B") {
             ageSec = Number(parts[1]);
             vals = parts.slice(2).map(Number);
-            document.getElementById("status").textContent = `Synced offline log (${logs.length} total)`;
+            document.getElementById("status").textContent = `Synced backlog (${logs.length + 1} logs)`;
           } else if (type === "L") {
-            vals = parts.slice(2).map(Number); // Skip uptimeSec
+            vals = parts.slice(2).map(Number);
             document.getElementById("status").textContent = `Connected Live (${logs.length + 1} logs)`;
           } else {
             return;
           }
 
-          const [bpm, hrv, still, tempF, posture, motion, bat] = vals;
+          const [bpm, hrv, spo2, still, tempF, posture, tiltDeg, motion, gyroDps, respRate, ax, ay, az, bat] = vals;
           const recordTs = Date.now() - (ageSec * 1000);
           const time = new Date(recordTs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-          if (type === "L") {
-            document.getElementById("bpmVal").textContent = `${bpm.toFixed(0)} BPM`;
-            document.getElementById("hrvVal").textContent = still ? `${hrv.toFixed(0)} ms` : "Moving...";
-            document.getElementById("tempVal").textContent = `${tempF.toFixed(1)} °F`;
-            document.getElementById("postureVal").textContent = `${posture ? "Standing" : "Lying"} | ${bat}%`;
-          }
-
-          logs.push({ ts: recordTs, time, bpm, hrv, still, tempF, posture, motion, bat });
+          logs.push({ ts: recordTs, time, bpm, hrv, spo2, still, tempF, posture, tiltDeg, motion, gyroDps, respRate, ax, ay, az, bat });
           localStorage.setItem("potsLogs", JSON.stringify(logs));
-          refreshCharts();
+          refreshDashboard();
         });
       } catch (err) {
         document.getElementById("status").textContent = "Error: " + err.message;
@@ -142,22 +399,23 @@
     });
 
     document.getElementById("exportBtn").addEventListener("click", () => {
-      const header = "timestamp,time,bpm,hrv,still,tempF,posture,motion,battery\n";
-      const rows = logs.map(r => `${new Date(r.ts).toISOString()},${r.time},${r.bpm},${r.hrv},${r.still},${r.tempF},${r.posture},${r.motion},${r.bat}`).join("\n");
+      const header = "iso_timestamp,local_time,bpm,hrv_ms,spo2_pct,is_still,skin_temp_f,posture_upright,tilt_deg,accel_motion,gyro_dps,resp_rate_bpm,accel_x,accel_y,accel_z,battery_pct\n";
+      const rows = logs.map(r => `${new Date(r.ts).toISOString()},${r.time},${r.bpm},${r.hrv},${r.spo2},${r.still},${r.tempF},${r.posture},${r.tiltDeg},${r.motion},${r.gyroDps},${r.respRate},${r.ax},${r.ay},${r.az},${r.bat}`).join("\n");
       const blob = new Blob([header + rows], { type: "text/csv" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = "pots_tracker_log.csv";
+      a.download = `laurs_pots_full_log_${new Date().toISOString().slice(0,10)}.csv`;
       a.click();
     });
 
     document.getElementById("clearBtn").addEventListener("click", () => {
-      if (confirm("Clear saved phone logs? (Export CSV first if needed)")) {
+      if (confirm("Clear all saved phone logs? (Export CSV first if you want a backup)")) {
         logs = [];
         localStorage.removeItem("potsLogs");
-        refreshCharts();
+        refreshDashboard();
       }
     });
   </script>
 </body>
 </html>
+
